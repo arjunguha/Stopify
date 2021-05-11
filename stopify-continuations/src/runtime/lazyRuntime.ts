@@ -10,6 +10,39 @@ export class LazyRuntime extends common.RuntimeImpl {
     super(stackSize, restoreFrames);
   }
 
+  reset(f: () => any): any {
+    try {
+      return f();
+    }
+    catch (exn) {
+      if (exn instanceof common.Capture) {
+        if (this.mode !== true) {
+          throw new Error('capture while restoring');
+        }
+        this.capturing = false;
+        let f = exn.f;
+        let k = this.makeCont(exn.stack);
+        return this.reset(() => f((v) => this.reset(() => k(v))));
+      }
+      else if (exn instanceof common.Restore) {
+        if (exn.savedStack.length > 0) {
+          throw new Error('savedStack found within shift/reset');
+        }
+        let stack = exn.stack;
+        this.stack = stack;
+        this.mode = false;
+        let frame = stack[stack.length - 1] as types.KFrameRest;
+        return this.reset(() => {
+          return frame.f.apply(frame.this || global, (frame.params || []) as any);
+        });
+
+      }
+      else {
+        throw exn;
+      }
+    }
+  }
+
   captureCC(f: (k: (x: Result) => any) => any): any {
     this.capturing = true;
     throw new common.Capture(f, []);

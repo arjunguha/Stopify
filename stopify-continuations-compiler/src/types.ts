@@ -1,5 +1,6 @@
 import * as t from 'babel-types';
 import { Result } from '@stopify/continuations-runtime';
+import { reset } from '@stopify/hygiene';
 
 export interface LineMapping {
   getLine: (line: number, column: number) => number | null
@@ -26,6 +27,7 @@ export interface CompilerOpts {
 export type Runner = {
   run: (onDone: (result: Result) => void) => void,
   processEvent: (body: () => any, receiver: (x: Result) => void) => void,
-  control: (f: (k: (v: any) => void) => void) => void,
+  shift: (f: (k: (v: any) => void) => void) => void,
+  reset: (f: () => any) => any,
   g: { [key: string]: any}
 };

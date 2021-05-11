@@ -13,10 +13,9 @@ import { compile } from '../src/index';
 
 function compileForTest(code: string) {
     let runner = compile(code).unwrap();
-    runner.g.callCC = function(f: any) {
-        return continuationRTS.newRTS('lazy').captureCC(k =>
-            f((x: any) => k({ type: 'normal', value: x })));
-    };
+    runner.g.callCC = (f: any) => runner.shift(f);
+    runner.g.shift = runner.g.callCC;
+    runner.g.reset = (f: any) => runner.reset(f);
     runner.g.assert = assert;
 
     // NOTE(arjun): For testing, we are relying on the fact that runner.run
@@ -197,8 +196,6 @@ test('fringe generator rest', () => {
      });
 });
 
-test
-
 test.skip('resume with an exception', () => {
     // TODO(arjun): We do not have the right API to resume with an exception.
 
@@ -233,4 +230,148 @@ test.skip('resume with an exception', () => {
     // console.log("Result of restart:", result);
 
     // assert(result == "throw-this");
+});
+
+test('shift/reset: discard context within reset', () => {
+    let { run, globals } = compileForTest(`
+        let r = 20 + reset(function() {
+            return 300 + shift(function(k) { return 1; })
+        });
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r: 21
+    });
+});
+
+test('shift/reset: restore context within reset', () => {
+    let { run, globals } = compileForTest(`
+        let r = 20 + reset(function() {
+            return 300 + shift(function(k) { return k(1); })
+        });
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r: 321
+    });
+});
+
+test('shift/reset: return to context within shift', () => {
+    let { run, globals } = compileForTest(`
+        let r = 20 + reset(function() {
+            return 300 + shift(function(k) { return k(1) + 4000; })
+        });
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r: 4321
+    });
+});
+
+test('shift/reset: nested reset, discard inner context', () => {
+    let { run, globals } = compileForTest(`
+        let r = 1 + reset(function() {
+            return 20 + reset(function() {
+                return 300 + shift(function(k) {
+                    return 4000;
+                });
+            });
+        });
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r: 4021
+    });
+});
+
+test('shift/reset: save continuation to global variable', () => {
+    let { run, globals } = compileForTest(`
+        let saved = false;
+        let r1 = 1 + reset(function() {
+            return 20 + shift(function(k) {
+                saved = k;
+                return 300;
+            });
+        });
+        let r2 = saved(4000);
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r1: 1 + 300,
+        r2: 20 + 4000
+    });
+});
+
+test('shift/reset: invoke continuation twice', () => {
+    let { run, globals } = compileForTest(`
+    r = reset(function() {
+        return 100 + shift(function(k) {
+            return k(1) + k(2);
+        });
+    });
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r: 100 + 1 + 100 + 2
+    });
+});
+
+test('shift/reset: two shifts', () => {
+    let { run, globals } = compileForTest(`
+    r = reset(function() {
+        return 100 + shift(function(k) {
+            return k(1) + k(2);
+        }) + shift(function(k) {
+            return k(3) + k(4);
+        });
+    });
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    expect(globals).toMatchObject({
+        r: (100 + 1 + 3) + (100 + 1 + 4) + (100 + 2 + 3) + (100 + 2 + 4)
+    });
+});
+
+
+test('shift/reset: non-determinism', () => {
+    let { run, globals } = compileForTest(`
+    function choose(args) {
+        return shift(function(k) {
+            let results = [ ];
+            for (let i = 0; i < args.length; i++) {
+                results = results.concat(k(args[i]));
+            }
+            return results;
+        });
+    }
+
+    function fail() {
+        return shift(function(k) {
+            return [];
+        });
+    }
+
+    function driver(body) {
+        return reset(function() {
+            return [body()];
+        });
+    }
+
+    function F() {
+        return choose([1,2,3]);
+    }
+
+    results = driver(function() {
+        let x = F();
+        let y = F();
+        if ((x + y) % 2 !== 0) {
+            fail();
+        }
+        return x + y;
+    });;
+    `);
+    expect(run()).toMatchObject({ type: 'normal' });
+    // Prelude> [ x + y | x <- [ 1 .. 3 ], y <- [ 1 .. 3], (x + y) `mod` 2 == 0 ]
+    // [2,4,4,4,6]
+    expect(globals.results).toMatchObject([2,4,4,4,6]);
 });

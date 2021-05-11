@@ -28,6 +28,10 @@ export class FudgeRuntime extends common.RuntimeImpl {
     super(Infinity, Infinity);
   }
 
+  reset(f: () => any): any {
+    throw 'Not implemented';
+  }
+
   captureCC(f: (k: any) => any): void {
     throw new common.Capture(f, []);
   }

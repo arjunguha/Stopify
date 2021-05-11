@@ -10,6 +10,10 @@ export class RetvalRuntime extends common.RuntimeImpl {
     super(stackSize, restoreFrames);
   }
 
+  reset(f: () => any): any {
+    throw 'Not implemented';
+  }
+
   captureCC(f: (k: (x: Result) => any) => any): any {
     this.capturing = true;
     return new common.Capture(f, []);

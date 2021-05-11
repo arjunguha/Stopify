@@ -12,6 +12,10 @@ export class EagerRuntime extends common.RuntimeImpl {
     this.eagerStack = [];
   }
 
+  reset(f: () => any): any {
+    throw 'Not implemented';
+  }
+
   captureCC(f: (k: (x: Result) => any) => any): any {
     this.capturing = true;
     throw new common.Capture(f, [...this.eagerStack]);

@@ -39,7 +39,7 @@ export const reserved = [
     '$top',
     '$S'
   ];
-  
+
 const visitor: babel.Visitor = {
     Program(path, state) {
         const opts: types.CompilerOpts = {
@@ -72,7 +72,7 @@ const visitor: babel.Visitor = {
             [ [ callcc.default, opts ] ]);
         path.stop();
     }
-}
+};
 
 /**
  * Compiles a program to support callCC.
@@ -137,10 +137,14 @@ class RunnerImpl implements types.Runner {
         return eval(this.code);
     }
 
-    control(f: (k: (v: any) => void) => void): void {
+    shift(f: (k: (v: any) => void) => void): void {
         return this.rts.captureCC(k => {
             return f((x: any) => k({ type: 'normal', value: x }));
         });
+    }
+
+    reset(f: () => any): any {
+        return this.rts.reset(f);
     }
 
 

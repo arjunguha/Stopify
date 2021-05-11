@@ -60,4 +60,6 @@ export interface Runtime {
 
   // Called when the stack needs to be captured.
   captureCC(f: (k: (x: Result) => any) => any): void;
+
+  reset(f: () => any): any;
 }
